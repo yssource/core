@@ -20,6 +20,7 @@ TAB = " " * 5
 TOP_PKG = "profiler"
 PKGS = ["plugnparse", "f0cal", TOP_PKG]
 SENTINEL = "--"
+DEFAULT_GIT_URL = "https://github.com/f0cal/f0cal.git"
 
 def run_exe(exe_unk):
     if isinstance(exe_unk, str):
@@ -153,7 +154,7 @@ MK_VENV = Cmd("python3 -m venv {venv_dir}")
 
 GIT_CLONE = Cmd(
     "git clone {url} {branch} {clone_dir}",
-    url="https://{creds}github.com/f0cal/public.git",
+    url=DEFAULT_GIT_URL,
     creds="{username}{password}@",
     password=":{password}",
     branch="-b {branch}",
@@ -205,7 +206,7 @@ def git_install(ns_dict, parser):
     assert VENV_ACTIVATE.run(ns_dict) if ns_dict["venv_dir"] else True
     assert UPGRADE_PIP.run(ns_dict)
     if ns_dict["clone_dir"] == "":
-        ns_dict["clone_dir"] = "./public"
+        ns_dict["clone_dir"] = "./f0cal"
     ns_dict["clone_dir"] = os.path.abspath(ns_dict["clone_dir"])
     assert WRITE_CONSTRAINTS.run(ns_dict)
     assert PIP_INSTALL.run(ns_dict)
