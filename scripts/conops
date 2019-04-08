@@ -1,0 +1,13 @@
+#! /bin/bash
+set -ex
+BASENAME=$(basename "$0")
+export CONAN_COLOR_DARK=1
+
+eval $(f0cal env activate -a)
+
+conan install invisible_demo/0.1@f0cal/testing
+conan install f0cal-opencv/4.0.1@f0cal/testing --build=missing
+
+f0cal pr add -- Invisibility_Cloak
+f0cal pr list
+f0cal pr view
