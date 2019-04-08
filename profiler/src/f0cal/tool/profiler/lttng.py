@@ -14,6 +14,10 @@ import f0cal
 
 from .manager import ProfileManager, MultiprocRunner
 
+
+class EVENT_PARANIOD_FLAG_ERROR(Exception):
+    pass
+
 SENTINEL = "--"
 
 """LTTNG_ABORT_ON_ERROR -- Set to 1 to abort the process after the first error
@@ -102,12 +106,7 @@ class LTTngSession(contextlib.AbstractContextManager):
                     with open(self._EVENT_PARANOID_FILE, "w") as f:
                         f.write("1")
                 else:
-                    raise Exception(
-                        "{file} is not set to 1 and f0cal does not have root "
-                        "permissions. Please set that flag to 1".format(
-                            file=self._EVENT_PARANOID_FILE
-                        )
-                    )
+                    raise EVENT_PARANIOD_FLAG_ERROR()
 
     def __init__(self):
         self._trace_path = None
@@ -139,6 +138,7 @@ class LTTngSession(contextlib.AbstractContextManager):
         self._run("lttng start")
         self._child_proc.run()
         assert self._child_proc.exitcode == 0, self._child_proc.exitcode
+        self._check_lttng_metadata()
 
     def _subprocess_run(self, *args, **dargs):
         return self.__class__.SUBPROCESS_FACTORY(*args, **dargs)
@@ -171,7 +171,6 @@ class LTTngSession(contextlib.AbstractContextManager):
             pass
         finally:
             self._run("lttng destroy")
-            self._check_lttng_metadata()
 
     def __enter__(self):
         self._start_session()
@@ -209,5 +208,11 @@ def _pr_add_entrypoint(parser, core, executable, name, **_):
     _env = {'LD_PRELOAD': mgr.ld_preload_str}
     with mgr.session_factory(core.config) as session:
         runner = MultiprocRunner.from_config(core.config)
-        runner = session.wrap(runner)
+        try:
+            runner = session.wrap(runner)
+        except EVENT_PARANIOD_FLAG_ERROR:
+            print("Error: {file} is not set to 1 and f0cal does not have root permissions. Please "
+                  "edit that file and set the flag to 1. You will need root permission to "
+                  "do so ".format(file=session._EVENT_PARANOID_FILE))
+            exit(1)
         runner.run(_exe, env=_env)
