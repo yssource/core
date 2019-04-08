@@ -1,0 +1,88 @@
+import java.security.MessageDigest
+
+node {ws(MessageDigest.getInstance("MD5").digest(pwd.bytes).encodeHex().toString()[1..8]){
+    try
+    {
+        stage('clean /tmp/salt-*') {
+            sh 'rm -rf /tmp/salt-*'
+            sh 'rm /tmp/f0cal.log || echo 0'
+        }
+        stage('pull bootstrap') {
+            echo sh(returnStdout: true, script: 'env')
+            sh 'ls'
+            notifyBuild()//started
+            deleteDir()
+            checkout scm // For github organization project
+            sh 'ls'
+            sh 'python3 --version'
+            sh 'which python3'
+        }
+        stage('bootstrap'){
+            sh 'echo ~'
+            sh 'which python3'
+            sh 'python3 -m venv ./_venv'
+            // Try to get the feature branch of recipes else use dev
+            sh 'git clone -b ${BRANCH_NAME} https://github.com/f0cal/f0cal-salt-recipes recipes || git clone -b dev https://github.com/f0cal/f0cal-salt-recipes recipes'
+            sh '. ./_venv/bin/activate && pip install  . -c constraints.txt'
+        }
+        stage('f0b run paste_compose'){
+            sh ". ./_venv/bin/activate && f0b run paste-compose pillarenv=test feature_branch=${BRANCH_NAME}"
+        }
+        stage('pylint'){
+            sh 'ls'
+            sh 'git clone --depth 1 https://github.com/f0cal/jenkins-utils.git '
+            sh 'ls'
+            sh '. ./_venv/bin/activate && pip install pylint' // make sure pylint is installed
+            sh '. ./_venv/bin/activate && python jenkins-utils/pylint_everything.py | tee pylint.out'
+            archiveArtifacts 'pylint.out'
+        }
+        stage('get results'){
+            //warnings canComputeNew: false, canResolveRelativePaths: false, categoriesPattern: '', defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'PyLint', pattern: 'pylint.out'], [parserName: 'Pep8', pattern: 'pep8.log']], unHealthy: ''
+            warnings canComputeNew: false, canResolveRelativePaths: false, categoriesPattern: '', defaultEncoding: '', excludePattern: '', healthy: '', includePattern: '', messagesPattern: '', parserConfigurations: [[parserName: 'PyLint', pattern: 'pylint.out']], unHealthy: ''
+            junit '**/*junit.xml' // any file named *junit.xml in any directory in the test
+            sh 'cp /tmp/f0cal.log f0cal.log'
+            archiveArtifacts 'f0cal.log'
+        }
+
+        notifyBuild(currentBuild.result)
+    }
+    catch (Exception e) {
+        notifyBuild("${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} - FAILURE (${e.message})!")
+        throw e; // rethrow so the build is considered failed
+    }
+}}
+
+
+def notifyBuild(String buildStatus = 'STARTED') {
+  // build status of null means successful
+  buildStatus =  buildStatus ?: 'SUCCESSFUL'
+
+  // Default values
+  def colorName = 'RED'
+  def colorCode = '#FF0000'
+  def subject = "${buildStatus}: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'"
+  def summary = "${subject} (${env.BUILD_URL})"
+  def details = """<p>STARTED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+    <p>Check console output at &QUOT;<a href='${env.BUILD_URL}'>${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>&QUOT;</p>"""
+
+  // Override default values based on build status
+  if (buildStatus == 'STARTED') {
+    color = 'YELLOW'
+    colorCode = '#FFFF00'
+  } else if (buildStatus == 'SUCCESSFUL') {
+    color = 'GREEN'
+    colorCode = '#00FF00'
+  } else {
+    color = 'RED'
+    colorCode = '#FF0000'
+  }
+
+  // Send notifications
+  slackSend (color: colorCode, message: summary)
+
+//  emailext(
+//      subject: subject,
+//      body: details,
+//      recipientProviders: [[$class: 'DevelopersRecipientProvider']]
+//   )
+}

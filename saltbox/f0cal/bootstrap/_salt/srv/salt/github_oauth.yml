@@ -1,0 +1,9 @@
+{% set username = pillar.github_user %}
+{% set password = pillar.github_pass %}
+{% set auth = salt['github.auth'](username, password) %}
+
+service: github.com
+username: {{ username }}
+auth_id: {{ auth.id }}
+auth_token: {{ auth.token }}
+

@@ -1,0 +1,4 @@
+To setup hooks run:
+`git config core.hooksPath .githooks`
+
+from top level of project

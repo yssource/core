@@ -1,0 +1,5 @@
+file_client: local
+root_dir: ${ROOT_DIR}
+file_roots:
+  base:
+    - ${ROOT_DIR}/srv/salt
