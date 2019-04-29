@@ -13,6 +13,7 @@ import shutil
 import f0cal
 
 from .manager import ProfileManager, MultiprocRunner
+from .ld_debug import LDDebugSession
 
 
 class EVENT_PARANIOD_FLAG_ERROR(Exception):
@@ -74,6 +75,10 @@ def config_file():
     [profiler]
     profiler_dir=${f0cal:prefix}/home/f0cal
     manifest_glob=${f0cal:prefix}/etc/f0cal/*.json
+    
+    [f0cal]
+    browser=firefox
+    symbols_file = ${f0cal:prefix}/etc/f0cal/symbols.csv
     """
 
 @f0cal.plugin(name="lttng", sets="ini")
@@ -108,10 +113,12 @@ class LTTngSession(contextlib.AbstractContextManager):
                 else:
                     raise EVENT_PARANIOD_FLAG_ERROR()
 
-    def __init__(self):
+    def __init__(self, config, session_id=None):
         self._trace_path = None
         self._events = None
         self._contexts = None
+        self.config = config
+        self.session_id = session_id
 
     @property
     def trace_path(self):
@@ -151,6 +158,7 @@ class LTTngSession(contextlib.AbstractContextManager):
 
 
     def _start_session(self):
+        create_cmd = "lttng create {session_id}".format(session_id=self.session_id)
         output = self._run("lttng create")
         regex = re.compile("Traces will be written in (.+)")
         m = regex.search(output.decode())
@@ -181,16 +189,17 @@ class LTTngSession(contextlib.AbstractContextManager):
         self._end_session()
 
     @classmethod
-    def from_config(cls, config):
+    def from_config(cls, config, session_id=None):
         assert cls.SUBPROCESS_FACTORY is not None
-        return cls()
+        return cls(config, session_id=session_id)
 
 def _pr_add_args(parser):
     parser.add_argument("--name", default=None)
+    parser.add_argument('--ldd', action='store_true', default=False)
     parser.add_argument("executable", default=None, nargs=argparse.REMAINDER)
 
 @f0cal.entrypoint(["pr", "add"], args=_pr_add_args)
-def _pr_add_entrypoint(parser, core, executable, name, **_):
+def _pr_add_entrypoint(parser, core, executable, name, ldd, **_):
     global LOG
     LOG = core.log
     _exe = executable
@@ -202,17 +211,25 @@ def _pr_add_entrypoint(parser, core, executable, name, **_):
     if _abs_exe_path is None:
         parser.error(f"Command not found: {_exe[0]}")
     _exe[0] = _abs_exe_path
-    ProfileManager.SESSION_CLS = LTTngSession
+    sessions_types = [LTTngSession]
+    if ldd:
+        sessions_types.append(LDDebugSession)
+    ProfileManager.SESSION_CLS = type("ProfilingSession", tuple(sessions_types), {})
     LTTngSession.SUBPROCESS_FACTORY = core.subprocess_run
+
     mgr = ProfileManager.from_config(core.config)
     _env = {'LD_PRELOAD': mgr.ld_preload_str}
+
     with mgr.session_factory(core.config) as session:
+        if ldd:
+            _env.update(session._env)
         runner = MultiprocRunner.from_config(core.config)
         try:
             runner = session.wrap(runner)
         except EVENT_PARANIOD_FLAG_ERROR:
             print("Error: {file} is not set to 1 and f0cal does not have root permissions. Please "
-                  "edit that file and set the flag to 1. You will need root permission to "
-                  "do so ".format(file=session._EVENT_PARANOID_FILE))
+                  "edit that file and set the flag to 1. You can do so by running: \n sudo sh -c "
+                  "'echo 1 >/proc/sys/kernel/perf_event_paranoid' ".format(
+                file=session._EVENT_PARANOID_FILE))
             exit(1)
         runner.run(_exe, env=_env)

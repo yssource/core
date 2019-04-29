@@ -35,10 +35,13 @@ def initialize_home(user_home):
     os.system("conan profile new default --detect")
     os.system("conan profile update settings.compiler.libcxx=libstdc++11 default")
     os.system("conan remote add f0cal https://api.bintray.com/conan/f0cal/conan")
+
+def install_packages():
     os.system("conan install babeltrace/1.53@f0cal/testing --build=missing")
 
 @f0cal.plugin(name="conan", sets="ini")
 def ini(user_home, hook_name):
     initialize_home(user_home)
     install_hook(user_home, hook_name)
+    install_packages()
 

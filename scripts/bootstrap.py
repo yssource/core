@@ -15,12 +15,19 @@ import string
 import shutil
 
 LOG = logging.getLogger(__file__)
-PKG_REQS = ["python3-venv", "gcc", "python3-dev"]
+PKG_REQS = ["python3.{version}-venv", "gcc", "python3.{version}-dev", "libhdf5-dev"]
 TAB = " " * 5
 TOP_PKG = "profiler"
 PKGS = ["plugnparse", "f0cal", TOP_PKG]
 SENTINEL = "--"
+DEFAULT_GIT_URL = "https://github.com/f0cal/f0cal.git"
+def get_version_minor():
+    version = sys.version_info
 
+    if not (version.major == 3 and version.minor >= 6):
+        raise Exception("Python 3.6 or greater is required")
+
+    return version.minor
 def run_exe(exe_unk):
     if isinstance(exe_unk, str):
         exe_unk = shlex.split(exe_unk)
@@ -149,11 +156,11 @@ class Cmd:
 
 APT_INSTALL = Cmd("{sudo} apt-get install {pkgs} -y")
 
-MK_VENV = Cmd("python3 -m venv {venv_dir}")
+MK_VENV = Cmd("python3.{version} -m venv {venv_dir}")
 
 GIT_CLONE = Cmd(
     "git clone {url} {branch} {clone_dir}",
-    url="https://{creds}github.com/f0cal/public.git",
+    url=DEFAULT_GIT_URL,
     creds="{username}{password}@",
     password=":{password}",
     branch="-b {branch}",
@@ -173,12 +180,14 @@ WRITE_CONSTRAINTS = FileWriter()
 
 RECURSIVE_COPY = Copier()
 
-UPGRADE_PIP = Cmd("pip install --upgrade pip")
+UPGRADE_PIP = Cmd("pip install --upgrade pip setuptools")
 
 
 def git_install(ns_dict, parser):
+    version = ns_dict['version']
+    pkgs = list(map(lambda x: x.format(version=version), PKG_REQS))
 
-    ns_dict["pkgs"] = " ".join(PKG_REQS + ["git"])
+    ns_dict["pkgs"] = " ".join(pkgs + ["git"])
     if ns_dict.pop("test"):
         cmds.append(RUN_TESTS)
     if ns_dict.pop("skip_system_packages"):
@@ -205,15 +214,17 @@ def git_install(ns_dict, parser):
     assert VENV_ACTIVATE.run(ns_dict) if ns_dict["venv_dir"] else True
     assert UPGRADE_PIP.run(ns_dict)
     if ns_dict["clone_dir"] == "":
-        ns_dict["clone_dir"] = "./public"
+        ns_dict["clone_dir"] = "./f0cal"
     ns_dict["clone_dir"] = os.path.abspath(ns_dict["clone_dir"])
     assert WRITE_CONSTRAINTS.run(ns_dict)
     assert PIP_INSTALL.run(ns_dict)
 
 
 def local_install(ns_dict, parser):
+    version = ns_dict['version']
+    pkgs = list(map(lambda x: x.format(version=version), PKG_REQS))
 
-    ns_dict["pkgs"] = " ".join(PKG_REQS)
+    ns_dict["pkgs"] = " ".join(pkgs)
     if ns_dict.pop("test"):
         cmds.append(RUN_TESTS)
     if ns_dict.pop("skip_system_packages"):
@@ -318,9 +329,14 @@ def main():
         "executable", nargs=argparse.REMAINDER, help="Executable to run after install"
     )
 
+
     pip_parser = subs.add_parser("pip")
 
     ns_dict = vars(parser.parse_args())
+
+    version = get_version_minor()
+
+    ns_dict.update({'version':version})
 
     mode = ns_dict.pop("mode", None)
     if not mode:

@@ -7,11 +7,18 @@ import cxxfilt
 import time
 import json
 import glob
+import tabulate
+import tempfile
 
 import f0cal
 
 from .manager import ProfileManager
 from .pandas_helpers import required_columns
+from .ld_debug import LDDebugOutputParser
+
+HERE = os.path.dirname(__file__)
+TABLE_TEMPLATE = "table_template.html"
+BLOB_FIELD = "${BLOB}"
 
 @wrapt.decorator
 def timing(fn, instance, args, dargs):
@@ -257,11 +264,12 @@ class TraceParser:
 
 
     @property
-    @required_columns(['hash', 'prefix'])
+    @required_columns(['hash', 'prefix', 'mangled_name'])
     @cached
     def hash_to_callable_df(self):
         df = pd.DataFrame.from_records(self.shims_dicts)
-        return df[['hash', 'prefix']]
+        return df[['hash', 'prefix', 'mangled_name']]
+
 
     @property
     @required_columns(['hash', 'prefix'])
@@ -359,9 +367,10 @@ def _pr_list_entrypoint(parser, core, query):
 
 def _pr_view_args(parser):
     parser.add_argument('--query', default=None)
+    parser.add_argument('--html', default=False, action='store_true')
 
 @f0cal.entrypoint(['pr', 'view'], args=_pr_view_args)
-def _pr_view_entrypoint(parser, core, query):
+def _pr_view_entrypoint(parser, core, query, html):
     ProfileManager.SESSION_CLS = object() # (br) HACK
     mgr = ProfileManager.from_config(core.config)
     df = mgr.traces_df
@@ -387,9 +396,31 @@ def _pr_view_entrypoint(parser, core, query):
     _df = _df.query("width.notnull() and width>0", engine="python")
     _df[["width", "height"]] = _df[["width", "height"]].astype(int)
 
+    if trace.get('ldd') == True:
+        log_path = trace['ldd_log_path']
+        files = glob.glob('{path}.*'.format(path=log_path))
+
+        lp = LDDebugOutputParser.from_list(files, core.config)
+        calls_df = lp.calls_df
+        calls_df = calls_df.query("dst.str.contains('libopencv')", engine="python")
+        calls_df = calls_df.drop_duplicates('prefix')
+
+        calls_df = calls_df[['prefix', 'dst']]
+        calls_df = calls_df.rename(columns={'dst': 'lib_path'})
+
+        not_traced_df = pd.merge(_df, calls_df, on='prefix', how='outer', indicator=True)
+        not_traced_df = not_traced_df[not_traced_df['_merge'] == 'right_only'][
+            ['prefix', 'lib_path']]
+
+        _df = pd.merge(_df, calls_df, on='prefix')
+
     _df.dt = _df.dt * 1e-6
 
-    _grp = _df.groupby(["prefix", "width", "height"])
+    keys = ["prefix", "width", "height"]
+    if trace.get('ldd') == True:
+        keys.append('lib_path')
+
+    _grp = _df.groupby(keys)
     _df1 = _grp.agg(dict(dt=["count"]))
     _df2 = _grp.agg(dict(dt=["min", "max", "mean"]))
     _df3 = (1000.0 / _df2[["dt"]])
@@ -398,4 +429,20 @@ def _pr_view_entrypoint(parser, core, query):
     _df2 = _df2.rename(dict(dt="Latency (ms)"), axis="columns")
     _df3 = _df3.rename(dict(min="max", max="min"), axis="columns") \
                .rename(dict(dt="Throughput (fps)"), axis="columns")
-    print(pd.concat([_df1, _df2, _df3], axis='columns').round(2))
+
+    report_df = pd.concat([_df1, _df2, _df3], axis='columns').round(2)
+
+    if html:
+        with open(tempfile.mktemp(), "w") as f:
+            template_str = open(os.path.join(HERE, TABLE_TEMPLATE)).read()
+            json_str = report_df.reset_index().to_json(orient="split")
+            template_str = template_str.replace(BLOB_FIELD, json_str)
+            f.write(template_str)
+            browser = core.config['f0cal']['browser']
+            os.system("{browser} {fname}".format(browser=browser, fname=f.name))
+    else:
+        print(report_df)
+        if trace.get('ldd') == True:
+            print('=' * 80)
+            print("Not traced functions")
+            print(not_traced_df.reset_index())

@@ -4,8 +4,9 @@ import json
 import pandas as pd
 from datetime import datetime
 import multiprocessing as mp
-
+import uuid
 import pandas as pd
+
 
 class MultiprocRunner:
     _ACK = 0
@@ -103,7 +104,7 @@ class ProfileManager:
 
         self._manifest_glob = manifest_glob
         self._preload_glob = preload_glob
-        self.session_id = session_id
+        self.session_id = session_id or str(uuid.uuid1())
 
     @property
     def trace_metadata(self):
@@ -136,14 +137,9 @@ class ProfileManager:
         return df
 
     def record_session_start(self, trace_path):
-        trace_dir = os.path.split(trace_path)[-1]
-        # _parts = trace_dir.split('-')
-        # session_id = _parts[1] if len(_parts) > 1 else _parts[0]
-        session_id = trace_dir
-        self.session_id = session_id
         metadata = self.trace_metadata
-        metadata[session_id] = {'start_time': str(datetime.now())}
-        metadata[session_id]['trace_path'] = trace_path
+        metadata[self.session_id] = {'start_time': str(datetime.now())}
+        metadata[self.session_id]['trace_path'] = trace_path
         self.save_metadata(metadata)
 
     def record_run(self, executable):
@@ -156,12 +152,20 @@ class ProfileManager:
         metadata[self.session_id]['end_time'] = str(datetime.now())
         self.save_metadata(metadata)
 
+    def record_ld_log(self, ld_log_path):
+        metadata = self.trace_metadata
+        metadata[self.session_id]['ldd'] = True
+        metadata[self.session_id]['ldd_log_path'] = ld_log_path
+        self.save_metadata(metadata)
+
     def session_factory(self, config):
 
         class ManagerMixin:
             def _start_session(_self, *args, **kwargs):
                 ret = super()._start_session(*args, **kwargs)
                 self.record_session_start(_self.trace_path)
+                if hasattr(super(), 'ld_log'):
+                    self.record_ld_log(super().ld_log)
                 return ret
 
             def run (_self, *args, **kwargs):
@@ -178,8 +182,8 @@ class ProfileManager:
 
                 return ret
 
-        new_class = type("ManagedSession", (ManagerMixin,self.SESSION_CLS ), {})
-        return new_class.from_config(config)
+        new_class = type("ManagedSession", (ManagerMixin, self.SESSION_CLS), {})
+        return new_class.from_config(config, self.session_id)
 
     def create_hdf_path(self, trace_id):
         metadata = self.trace_metadata
