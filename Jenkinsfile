@@ -15,6 +15,9 @@ pipeline {
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
                     }
+                    options {
+                        lock('murder')
+                    }
                 }
 
                 stage('Build On Tx1') {
@@ -28,6 +31,9 @@ pipeline {
                         sh "sudo salt '$MACHINE' cmd.run 'mkdir $TEST_DIR'"
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
+                    }
+                    options {
+                        lock('tx1')
                     }
                 }
 
@@ -43,6 +49,9 @@ pipeline {
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
                     }
+                    options {
+                        lock('skull-canyon')
+                    }
                 }
 
                 stage('Build On nano') {
@@ -56,6 +65,9 @@ pipeline {
                         sh "sudo salt '$MACHINE' cmd.run 'mkdir $TEST_DIR'"
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
+                    }
+                    options {
+                        lock('nano')
                     }
                 }
 
@@ -71,6 +83,9 @@ pipeline {
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
                     }
+                    options {
+                        lock('rp-u1804s-1')
+                    }
                 }
 
                 stage('Build On coral') {
@@ -84,6 +99,9 @@ pipeline {
                         sh "sudo salt '$MACHINE' cmd.run 'mkdir $TEST_DIR'"
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
+                    }
+                    options {
+                        lock('coral')
                     }
                 }
 
@@ -99,6 +117,9 @@ pipeline {
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
                     }
+                    options {
+                        lock('tx2')
+                    }
                 }
 
                 stage('Build On upsquared') {
@@ -112,6 +133,9 @@ pipeline {
                         sh "sudo salt '$MACHINE' cmd.run 'mkdir $TEST_DIR'"
                         sh "sudo salt-cp '$MACHINE' ${WORKSPACE} $TEST_DIR --chunked"
                         sh "sudo salt '$MACHINE' cmd.run 'cd $TEST_DIR/F0cal_Mirror && python3.6 scripts/bootstrap.py -d -v _venv local -- scripts/conops'"
+                    }
+                    options {
+                        lock('upsquared')
                     }
                 }
 
