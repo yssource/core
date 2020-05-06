@@ -17,8 +17,7 @@ class PluginScanner(venusian.Scanner):
         self._scan_fails[name] = exc
         if not issubclass(exc[0], ImportError):
             raise  # reraise the last exception
-        # self._scan_fails.pop()
-
+        print(f'WARNING: Failed to scan: {name} due to import error')
     def scan(self, pkg, **dargs):
         if isinstance(pkg, str):
             pkg = __import__(pkg)
