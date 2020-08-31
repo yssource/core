@@ -1,3 +1,4 @@
+#PYTHON_ARGCOMPLETE_OK
 import plugnparse
 import f0cal
 
