@@ -7,7 +7,7 @@ __version__ = "0.0.1"
 from .decorators import *
 from .parserfactory import ParserFactory
 from .plugins import PluginScanner
-
+import argcomplete
 
 def scan_and_run(package_name, base_parser=None, use_dict=True, use_kwargs=True):
     return run(
@@ -30,6 +30,7 @@ def scan(package_name, base_parser=None):
 
 def run(factory, use_dict=True, use_kwargs=True):
     parser = factory.make_parser()
+    argcomplete.autocomplete(parser)
     ns, _func = parser.parse_args()
     ns = vars(ns) if use_dict or use_kwargs else ns
     if use_kwargs:
